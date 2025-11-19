@@ -1,52 +1,678 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Платежный календарь</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="styles.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Text&display=swap');
+
+  :root {
+    --color-primary: #007aff;
+    --color-success: #34c759;
+    --color-warning: #ff9500;
+    --color-danger: #ff3b30;
+    --color-bg: #f2f2f7;
+    --color-card-bg: #ffffff;
+    --color-text-primary: #000000;
+    --color-text-secondary: #555555;
+    --shadow-light: 0 1px 3px rgba(0,0,0,0.12);
+  }
+
+  body {
+    margin: 0;
+    font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+      Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: env(safe-area-inset-top) 16px 16px 16px;
+  }
+
+  h1 {
+    margin-top: 24px;
+    font-weight: 600;
+    font-size: 1.8rem;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 480px;
+    background: var(--color-card-bg);
+    border-radius: 16px;
+    box-shadow: var(--shadow-light);
+    padding: 20px;
+    margin-bottom: 32px;
+    box-sizing: border-box;
+  }
+
+  button {
+    background: var(--color-primary);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    user-select: none;
+    margin: 10px 5px 20px 0;
+    box-shadow: var(--shadow-light);
+  }
+
+  button:active {
+    background-color: #0051b5;
+  }
+
+  #paymentsList {
+    max-height: 400px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+
+  .month-group {
+    margin-bottom: 28px;
+  }
+
+  .month-header {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--color-text-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .month-sum {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--color-primary);
+  }
+
+  .payment-item {
+    background: var(--color-bg);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+
+  .payment-item.frozen {
+    opacity: 0.5;
+  }
+
+  .payment-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  .payment-name {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+  }
+
+  .payment-amount {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+  }
+
+  .payment-status {
+    margin-left: 15px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    user-select: none;
+  }
+
+  .status-overdue {
+    background-color: var(--color-danger);
+    color: white;
+  }
+
+  .status-today {
+    background-color: var(--color-warning);
+    color: white;
+  }
+
+  .status-soon {
+    background-color: var(--color-success);
+    color: white;
+  }
+
+  .payment-actions {
+    margin-left: 15px;
+    display: flex;
+    gap: 6px;
+  }
+
+  .payment-actions button {
+    background: #ddd;
+    color: #444;
+    font-weight: 600;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    box-shadow: none;
+    border-radius: 8px;
+  }
+
+  .payment-actions button:hover {
+    background: #ccc;
+  }
+
+  /* Modal overlay */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.35);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  @keyframes fadeIn {
+    from {opacity: 0;}
+    to {opacity: 1;}
+  }
+
+  .modal {
+    background: white;
+    border-radius: 20px;
+    padding: 24px 32px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: var(--shadow-light);
+    animation: slideUp 0.3s ease forwards;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .modal h2 {
+    margin-top: 0;
+    font-weight: 700;
+    font-size: 1.4rem;
+    margin-bottom: 16px;
+  }
+
+  .modal label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    margin-top: 12px;
+    color: var(--color-text-secondary);
+  }
+
+  .modal input,
+  .modal select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    font-size: 1rem;
+    box-sizing: border-box;
+  }
+
+  .modal-buttons {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 14px;
+  }
+
+  .modal-buttons button {
+    min-width: 80px;
+  }
+
+  /* Scrollbar styling */
+  #paymentsList::-webkit-scrollbar {
+    width: 8px;
+  }
+  #paymentsList::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.1);
+    border-radius: 20px;
+  }
+</style>
 </head>
 <body>
 
 <div id="app">
-  <h1>Платёжный календарь</h1>
-  <button id="add-payment">Добавить платеж</button>
+  <h1>Платежный календарь</h1>
 
-  <div id="payments"></div>
+  <button id="btnAddPayment">Добавить платеж</button>
+  <button id="btnExport">Экспорт JSON</button>
+  <button id="btnImport">Импорт JSON</button>
+  <input type="file" id="fileInput" accept=".json" style="display:none" />
+
+  <div id="paymentsList" aria-live="polite"></div>
 </div>
 
-<script type="module">
-  import { loadData, saveData } from "./storage.js";
-  import { getTelegramUserId } from "./bot.js";
+<!-- Модальное окно -->
+<div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <h2 id="modalTitle">Добавить платеж</h2>
+    <form id="paymentForm">
+      <label for="inputName">Название</label>
+      <input type="text" id="inputName" required maxlength="40" autocomplete="off" />
 
-  const userId = getTelegramUserId();
+      <label for="inputAmount">Сумма (₽)</label>
+      <input type="number" id="inputAmount" required min="0" step="0.01" />
 
-  async function init() {
-      const data = await loadData();
-      render(data);
-  }
+      <label for="selectDateType">Тип даты</label>
+      <select id="selectDateType" required>
+        <option value="fixed">Фиксированное число месяца</option>
+        <option value="before">До определенного числа (включительно)</option>
+        <option value="interval">Интервальный платеж</option>
+      </select>
 
-  function render(data) {
-      const box = document.getElementById("payments");
-      box.innerHTML = data.payments.length
-          ? data.payments.map(p => `<div>${p.name} — ${p.amount}</div>`).join("")
-          : "<div>Платежей пока нет</div>";
-  }
+      <label for="inputDateValue">Значение даты</label>
+      <input type="number" id="inputDateValue" required min="1" max="31" />
 
-  document.getElementById("add-payment").onclick = async () => {
-      const data = await loadData();
-      data.payments.push({
-          id: Date.now(),
-          name: "Новый платеж",
-          amount: 1000
-      });
-      await saveData(data);
-      init();
+      <label><input type="checkbox" id="inputFrozen" /> Заморозить платеж</label>
+      <label><input type="checkbox" id="inputArchived" /> Архивировать платеж</label>
+
+      <div class="modal-buttons">
+        <button type="button" id="btnCancel">Отмена</button>
+        <button type="submit" id="btnSave">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'payments_data';
+
+  let paymentsData = {
+    settings: {},
+    payments: [],
+    history: []
   };
 
-  init();
+  // Элементы
+  const paymentsList = document.getElementById('paymentsList');
+  const btnAddPayment = document.getElementById('btnAddPayment');
+  const btnExport = document.getElementById('btnExport');
+  const btnImport = document.getElementById('btnImport');
+  const fileInput = document.getElementById('fileInput');
+
+  const modalOverlay = document.getElementById('modalOverlay');
+  const paymentForm = document.getElementById('paymentForm');
+  const modalTitle = document.getElementById('modalTitle');
+
+  const inputName = document.getElementById('inputName');
+  const inputAmount = document.getElementById('inputAmount');
+  const selectDateType = document.getElementById('selectDateType');
+  const inputDateValue = document.getElementById('inputDateValue');
+  const inputFrozen = document.getElementById('inputFrozen');
+  const inputArchived = document.getElementById('inputArchived');
+
+  let editingPaymentId = null;
+
+  // Загрузка данных из localStorage
+  function loadData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      paymentsData = JSON.parse(raw);
+    } catch {
+      paymentsData = { settings: {}, payments: [], history: [] };
+    }
+  }
+  // Сохранение данных
+  function saveData() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(paymentsData));
+  }
+
+  // Формат даты для группировки: "YYYY-MM"
+  function getMonthKey(date) {
+    return ${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')};
+  }
+
+  // Возвращает название месяца и года
+  function getMonthName(yearMonth) {
+    const [year, month] = yearMonth.split('-').map(Number);
+    const d = new Date(year, month - 1);
+    return d.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
+  }
+
+  // Получить статус платежа: просрочено, сегодня, скоро
+  function getPaymentStatus(payment) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    let paymentDate;
+
+    switch(payment.dateType) {
+      case 'fixed':
+        paymentDate = new Date(year, month, payment.dateValue);
+        break;
+      case 'before':
+        paymentDate = new Date(year, month, payment.dateValue);
+        break;
+      case 'interval':
+        if (payment.intervalStart) {
+          paymentDate = new Date(payment.intervalStart);
+          paymentDate.setDate(paymentDate.getDate() + Number(payment.dateValue));
+        } else {
+          paymentDate = new Date(year, month, 1);
+          paymentDate.setDate(paymentDate.getDate() + Number(payment.dateValue));
+        }
+        break;
+      default:
+        paymentDate = new Date(year, month, payment.dateValue);
+    }
+
+    const diffTime = paymentDate - now;
+    const diffDays = Math.floor(diffTime / (1000*60*60*24));
+
+    if(payment.archived) return null;
+
+    if(diffDays < 0) return 'overdue';
+    if(diffDays === 0) return 'today';
+    if(diffDays <= 3) return 'soon';
+
+    return null;
+  }
+
+  // Цвет для статуса
+  function getStatusClass(status) {
+    switch(status) {
+      case 'overdue': return 'status-overdue';
+      case 'today': return 'status-today';
+      case 'soon': return 'status-soon';
+      default: return '';
+    }
+  }
+
+  // Рендер платежей с группировкой по месяцам и подсчётом суммы
+  function renderPayments() {
+    paymentsList.innerHTML = '';
+
+    if(paymentsData.payments.length === 0) {
+      paymentsList.innerHTML = '<p>Платежей пока нет</p>';
+      return;
+    }
+
+    // Группируем по месяцам
+    const grouped = {};
+    paymentsData.payments.forEach(p => {
+      if(p.archived) return;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      let key = ${year}-${String(month+1).padStart(2, '0')};
+      if(!grouped[key]) grouped[key] = [];
+      grouped[key].push(p);
+    });
+
+    // Перебираем группы по ключам (месяцам)
+    Object.keys(grouped).sort().forEach(monthKey => {
+      const monthGroup = grouped[monthKey];
+      // Подсчитываем сумму
+      const total = monthGroup.reduce((acc, p) => acc + Number(p.amount), 0);
+
+      // Создаём блок месяца
+      const monthDiv = document.createElement('div');
+      monthDiv.className = 'month-group';
+
+      const header = document.createElement('div');
+      header.className = 'month-header';
+      header.innerHTML = <div>${getMonthName(monthKey)}</div><div class="month-sum">${total.toFixed(2)} ₽</div>;
+      monthDiv.appendChild(header);
+
+      // Список платежей
+      monthGroup.forEach(p => {
+        const status = getPaymentStatus(p);
+        const item = document.createElement('div');
+        item.className = 'payment-item';
+        if(p.frozen) item.classList.add('frozen');
+
+        // Контейнер с названием и суммой
+        const info = document.createElement('div');
+        info.className = 'payment-info';
+        info.innerHTML = <div class="payment-name">${p.name}</div><div class="payment-amount">${p.amount.toFixed(2)} ₽</div>;
+        item.appendChild(info);
+
+        // Статус
+        if(status) {
+          const statusBadge = document.createElement('div');
+          statusBadge.className = payment-status ${getStatusClass(status)};
+          statusBadge.textContent = status === 'overdue' ? 'Просрочено' :
+                                  status === 'today' ? 'Сегодня' : 'Скоро';
+          item.appendChild(statusBadge);
+        }
+
+        // Кнопки управления
+        const actions = document.createElement('div');
+        actions.className = 'payment-actions';
+
+        const btnEdit = document.createElement('button');
+        btnEdit.textContent = '✏️';
+        btnEdit.title = 'Редактировать';
+        btnEdit.onclick = () => openModal(p.id);
+        actions.appendChild(btnEdit);
+
+        const btnFreeze = document.createElement('button');
+        btnFreeze.textContent = p.frozen ? '❄️' : '🔥';
+        btnFreeze.title = p.frozen ? 'Разморозить' : 'Заморозить';
+        btnFreeze.onclick = () => {
+          p.frozen = !p.frozen;
+          saveAndRender();
+        };
+        actions.appendChild(btnFreeze);
+
+        const btnArchive = document.createElement('button');
+        btnArchive.textContent = p.archived ? '📦' : '📥';
+        btnArchive.title = p.archived ? 'Разархивировать' : 'Архивировать';
+        btnArchive.onclick = () => {
+          p.archived = !p.archived;
+          saveAndRender();
+        };
+        actions.appendChild(btnArchive);
+
+        const btnDelete = document.createElement('button');
+        btnDelete.textContent = '🗑️';
+        btnDelete.title = 'Удалить';
+        btnDelete.onclick = () => {
+          if(confirm(`Удалить платеж "${p.name}"?`)) {
+            paymentsData.payments = paymentsData.payments.filter(x => x.id !== p.id);
+            saveAndRender();
+          }
+        };
+        actions.appendChild(btnDelete);
+
+        item.appendChild(actions);
+        monthDiv.appendChild(item);
+      });
+
+      paymentsList.appendChild(monthDiv);
+    });
+  }
+
+  function saveAndRender() {
+    saveData();
+    renderPayments();
+  }
+
+  // Открыть модальное окно, если id === null — новый платеж
+  function openModal(id=null) {
+    editingPaymentId = id;
+    if(id === null) {
+      modalTitle.textContent = "Добавить платеж";
+      paymentForm.reset();
+      inputFrozen.checked = false;
+      inputArchived.checked = false;
+    } else {
+      modalTitle.textContent = "Редактировать платеж";
+      const p = paymentsData.payments.find(x => x.id === id);
+      if(!p) return;
+      inputName.value = p.name;
+      inputAmount.value = p.amount;
+      selectDateType.value = p.dateType;
+      inputDateValue.value = p.dateValue;
+      inputFrozen.checked = p.frozen;
+      inputArchived.checked = p.archived;
+    }
+    modalOverlay.classList.add('active');
+    inputName.focus();
+  }
+
+  // Закрыть модалку
+  function closeModal() {
+    modalOverlay.classList.remove('active');
+    editingPaymentId = null;
+  }
+  // Валидация формы и сохранение
+function validateAndSave(e) {
+  e.preventDefault();
+
+  const name = inputName.value.trim();
+  const amount = parseFloat(inputAmount.value);
+  const dateType = selectDateType.value;
+  const dateValue = Number(inputDateValue.value);
+  const frozen = inputFrozen.checked;
+  const archived = inputArchived.checked;
+
+  if (!name) {
+    alert('Введите название платежа');
+    inputName.focus();
+    return;
+  }
+  if (isNaN(amount) || amount < 0) {
+    alert('Введите корректную сумму');
+    inputAmount.focus();
+    return;
+  }
+  if (![ 'fixed', 'before', 'interval' ].includes(dateType)) {
+    alert('Выберите тип даты');
+    selectDateType.focus();
+    return;
+  }
+  if (!(dateValue >= 1 && dateValue <= 31)) {
+    alert('Значение даты должно быть от 1 до 31');
+    inputDateValue.focus();
+    return;
+  }
+
+  if (editingPaymentId === null) {
+    // Добавляем новый платеж
+    paymentsData.payments.push({
+      id: Date.now(),
+      name,
+      amount,
+      dateType,
+      dateValue,
+      frozen,
+      archived
+    });
+  } else {
+    // Редактируем существующий
+    const p = paymentsData.payments.find(p => p.id === editingPaymentId);
+    if (!p) {
+      alert('Ошибка: платеж не найден');
+      closeModal();
+      return;
+    }
+    p.name = name;
+    p.amount = amount;
+    p.dateType = dateType;
+    p.dateValue = dateValue;
+    p.frozen = frozen;
+    p.archived = archived;
+  }
+
+  saveAndRender();
+  closeModal();
+}
+
+// Экспорт в JSON
+function exportJSON() {
+  const dataStr = JSON.stringify(paymentsData, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'payments.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Импорт JSON
+function importJSON() {
+  fileInput.click();
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (imported.payments && Array.isArray(imported.payments)) {
+        paymentsData = imported;
+        saveAndRender();
+        alert('Импорт данных завершён');
+      } else {
+        alert('Неверный формат файла');
+      }
+    } catch {
+      alert('Ошибка чтения файла');
+    }
+  };
+  reader.readAsText(file);
+  fileInput.value = '';
+}
+
+// События
+btnAddPayment.addEventListener('click', () => openModal());
+btnExport.addEventListener('click', exportJSON);
+btnImport.addEventListener('click', importJSON);
+fileInput.addEventListener('change', handleFileSelect);
+paymentForm.addEventListener('submit', validateAndSave);
+document.getElementById('btnCancel').addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', e => {
+  if (e.target === modalOverlay) closeModal();
+});
+
+// Инициализация
+loadData();
+renderPayments();
+})();
 </script>
 
 </body>
-</html>
